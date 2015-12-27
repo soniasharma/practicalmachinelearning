@@ -1,0 +1,75 @@
+---
+title: "Prediction Assignment"
+output: html_document
+---
+### Aim
+In this assignment we use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants to quantify how well they do a particular activity. 
+More information is available from the website http://groupware.les.inf.puc-rio.br/har. The goal of the project is to predict the manner in which they did the exercise. This is the classe variable with 5 different values. 
+
+
+### Feature Selection
+
+We remove the variables which 
+
+1.  have near zero variance,
+2. have NAs (because summary(training) shows the NAs occur 98% of the times in all the variables which have them).
+3. are the first 7 variables (these wouldn't seem to affect the prediction too much) 
+
+### Cross Validation and Model Selection
+
+We use random forests to build the prediction model and $10$-fold cross validation to avoid overfittng and to test the model for out of sample error rate. We selected this model because it turns out to be fast (it took less than 30 sec to train the training set) and highly accurate. Indeed, we get a $99.6\%$ accuracy on the training set and $99.5\%$ acuracy on the validation test set. We expected the out of sample error rate on the validation test set to be higher than on the training which turns out to be true, $.42\%$ on training and $.51 \%$ on validation test set. Thus it seems to be a good model for this prediction.   
+
+### The Analysis
+
+```{r, results= 'hide'}
+library(caret); library(ggplot2); library(randomForest)
+```
+
+```{r, cache=TRUE, results= 'hide'}
+trainURL <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+testURL <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"   
+download.file(trainURL, destfile = "~/Desktop/Data Science Specialization/Practical Machine Learning/Course Project/train.csv", method = "curl")
+download.file(testURL, destfile = "~/Desktop/Data Science Specialization/Practical Machine Learning/Course Project/test.csv", method = "curl")
+
+training <- read.csv("train.csv", header = TRUE)
+testing <- read.csv("test.csv", header = TRUE)
+
+summary(training)
+```
+
+```{r, chache=TRUE} 
+#Feature Selection
+nzv <- nearZeroVar(training, saveMetrics = TRUE)
+sum(nzv$nzv) 
+I <- subset(1:160, nzv$nzv == FALSE & 1:160 > 7 )  # Remove the indicies corresponding to near ero variables and the first 7 variables leaving 94 variables out of 160
+
+ trainingsub <- training[, I]  # remove the variables with near zero variance
+ training.new <- trainingsub[, colSums(is.na(trainingsub)) == 0] # further remove variables with NAs 
+```
+ 
+```{r, chache=TRUE} 
+# Validation and Model Fitting
+set.seed(3333)
+folds <- createFolds(y = training.new$classe, k = 10, list = TRUE, returnTrain = TRUE)
+
+modelfitRF <- randomForest(classe ~ . , data = training.new[folds[[3]],], ntree = 100)
+modelfitRF
+```
+
+```{r, chache=TRUE}
+# Prediction and accuracy on validation test set
+testingfold <- training.new[ -folds[[3]],]
+predcitionFold <- predict(modelfitRF, testingfold)
+confMatrix <- confusionMatrix(testingfold$classe, predcitionFold)
+confMatrix$table ; confMatrix$overall
+```
+
+```{r, chache=TRUE}
+# Test set prediction 
+ testingsub <- testing[, I]  # remove the variables which had near zero variance for training set
+testing.new <- testingsub[, colSums(is.na(trainingsub)) == 0] # futher remove variables which had NAs in the training set
+
+prediction<-predict(modelfitRF, testing.new)
+prediction # gives the final classification of the 20 test set values
+```
+
